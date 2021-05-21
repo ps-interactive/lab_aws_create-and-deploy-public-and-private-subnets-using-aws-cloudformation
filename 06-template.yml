@@ -1,0 +1,263 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Create and Deploy Public and Private Subnets'
+
+Resources:
+  VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: Lab VPC
+
+  PublicSubnet:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: us-west-2a
+      CidrBlock: 10.0.0.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: Public Subnet
+
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+
+  GatewayToInternet:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+
+  PublicRoute:
+    Type: 'AWS::EC2::Route'
+    DependsOn: GatewayToInternet
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable Web and SSH access
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: WebServer SecurityGroup
+
+  # Private subnet starts here
+
+  PrivateSubnet:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: us-west-2a
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: Private Subnet
+
+  NatGateway:
+    Type: 'AWS::EC2::NatGateway'
+    DependsOn: NatPublicIP
+    Properties:
+      AllocationId: !GetAtt NatPublicIP.AllocationId
+      SubnetId: !Ref PublicSubnet
+
+  NatPublicIP:
+    Type: 'AWS::EC2::EIP'
+    DependsOn: VPC
+    Properties:
+      Domain: vpc
+
+  PrivateRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Network
+          Value: Private
+
+  PrivateRoute:
+    Type: 'AWS::EC2::Route'
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PrivateSubnetRouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PrivateSubnet
+      RouteTableId: !Ref PrivateRouteTable
+
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable web access via port 80
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: WebServer SecurityGroup
+
+  # Private EC2 instance starts here
+
+  AppServer:
+    Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            /etc/systemd/system/node-app.service:
+              content: !Sub |
+                [Unit]
+                Description=Node API
+                After=network.target
+
+                [Service]
+                User=ec2-user
+                Environment=NODE_ENV=production
+                Environment=PORT=3000
+                WorkingDirectory=/home/ec2-user/meetup-api
+                ExecStart=/usr/bin/npm start
+                Restart=always
+                RestartSec=500ms
+                StartLimitInterval=0
+
+                [Install]
+                WantedBy=multi-user.target
+          commands:
+            01_git_clone:
+              command: 'git clone https://github.com/caike/meetup-api.git'
+              cwd: '/home/ec2-user/'
+            02_npm_install:
+              command: 'npm install --production'
+              cwd: '/home/ec2-user/meetup-api'
+            03_enable_app:
+              command: systemctl enable node-app
+            04_start_app:
+              command: systemctl start node-app
+    Properties:
+      InstanceType: t3.nano
+      ImageId: ami-0cf6f5c8a62fa5da6
+      NetworkInterfaces:
+        - DeleteOnTermination: 'True'
+          SubnetId: !Ref PrivateSubnet
+          DeviceIndex: '0'
+          GroupSet: [!GetAtt AppServerSecurityGroup.GroupId]
+      UserData:
+        'Fn::Base64': !Sub |
+          #!/bin/bash -xe
+          yum update -y
+          yum install -y aws-cfn-bootstrap
+          curl --silent --location https://rpm.nodesource.com/setup_12.x | bash -
+          yum install git nodejs -y
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource AppServer --region ${AWS::Region}
+      Tags:
+        - Key: Name
+          Value: App Server
+
+  AppServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: AppServer Security Group
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - SourceSecurityGroupId: !Ref WebServerSecurityGroup
+          IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+      Tags:
+        - Key: Name
+          Value: AppServer SecurityGroup
+
+  # Public EC2 Instance starts here
+
+  WebServer:
+    Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            /etc/nginx/nginx.conf:
+              content: !Sub |
+                user nginx;
+                worker_processes auto;
+                error_log /var/log/nginx/error.log;
+                pid /var/run/nginx.pid;
+                events {
+                    worker_connections 1024;
+                }
+                http {
+                    access_log    /var/log/nginx/access.log  combined;
+                    include       /etc/nginx/mime.types;
+                    default_type  application/octet-stream;
+                    server {
+                      listen 80;
+                      location / {
+                        proxy_pass <insert-app-server-here>;
+                      }
+                    }
+                }
+          commands:
+            01_enable_nginx:
+              command: systemctl enable nginx
+            02_start_nginx:
+              command: systemctl start nginx
+    Properties:
+      InstanceType: t3.nano
+      ImageId: ami-0cf6f5c8a62fa5da6
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: 'True'
+          DeleteOnTermination: 'True'
+          SubnetId:
+          DeviceIndex: '0'
+          GroupSet: [!GetAtt WebServerSecurityGroup.GroupId]
+      UserData:
+        'Fn::Base64': !Sub |
+          #!/bin/bash -xe
+          yum update -y
+          yum install -y aws-cfn-bootstrap
+          amazon-linux-extras install nginx1.12 -y
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource WebServer --region ${AWS::Region}
+      Tags:
+        - Key: Name
+          Value: Web Server
+
+Outputs:
+  PublicDNS:
+    Description: Public DNSName of the WebServer
+    Value:
+      Fn::GetAtt:
+        - WebServer
+        - PublicDnsName
