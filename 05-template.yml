@@ -138,7 +138,7 @@ Resources:
                 WantedBy=multi-user.target
           commands:
             01_git_clone:
-              command: 'git clone https://github.com/caike/meetup-api.git'
+              command: 'git clone --branch node-api https://github.com/ps-interactive/lab_aws_create-and-deploy-public-and-private-subnets-using-aws-cloudformation.git'
               cwd: '/home/ec2-user/'
             02_npm_install:
               command: 'npm install --production'
