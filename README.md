@@ -1,5 +1,5 @@
-# CloudFormation templates for PS Lab
+# Meetup Clone API
 
-Initial CF templates for Pluralsight Lab.
+Demo API for OrlandoJS presentation
 
-Check the `answers` branch for the complete templates.
+[![Deploy to Heroku](https://www.herokucdn.com/deploy/button.png)](https://heroku.com/deploy)

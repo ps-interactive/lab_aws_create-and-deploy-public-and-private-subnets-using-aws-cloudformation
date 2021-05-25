@@ -1,0 +1,29 @@
+{
+  "events": [
+    {
+      "date": "2020-01-10",
+      "name": "Intro to JS",
+      "rsvp-count": 20
+    },
+    {
+      "date": "2020-02-11",
+      "name": "Testing in React",
+      "rsvp-count": 40
+    },
+    {
+      "date": "2020-03-12",
+      "name": "Making API calls using Axios",
+      "rsvp-count": 35
+    },
+    {
+      "date": "2020-04-13",
+      "name": "Deploying JS to AWS",
+      "rsvp-count": 50
+    },
+    {
+      "date": "2020-05-14",
+      "name": "Serverless in JS",
+      "rsvp-count": 56
+    }
+  ]
+}
