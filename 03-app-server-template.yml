@@ -1,0 +1,36 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Create and Deploy Public and Private Subnets'
+
+Parameters:
+  InfraStackName:
+    Type: String
+    Default: Labs
+    Description: The stack name used for the infrastructure stack
+
+Resources:
+  AppServer:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.nano
+      ImageId: ami-0cf6f5c8a62fa5da6
+      SubnetId: !ImportValue
+        'Fn::Sub': '${InfraStackName}-PrivSubnetId'
+      SecurityGroupIds:
+        - !ImportValue
+          'Fn::Sub': '${InfraStackName}-AppSecurityGroupId'
+      UserData:
+        'Fn::Base64': !Sub |
+          #!/bin/bash -xe
+          yum update -y
+          amazon-linux-extras install nginx1.12 -y
+          echo "Hello from App Server" > /usr/share/nginx/html/index.html
+          systemctl start nginx
+      Tags:
+        - Key: Name
+          Value: App Server
+
+Outputs:
+  EC2PrivateIP:
+    Description: The private IP of the App Server
+    Value: !GetAtt AppServer.PrivateIp

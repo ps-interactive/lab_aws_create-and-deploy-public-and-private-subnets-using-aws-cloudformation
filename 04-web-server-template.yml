@@ -1,0 +1,64 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Create and Deploy Public and Private Subnets'
+
+Parameters:
+  InfraStackName:
+    Type: String
+    Default: Labs
+    Description: The stack name used for the infrastructure stack
+
+Resources:
+  WebServer:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.nano
+      ImageId: ami-0cf6f5c8a62fa5da6
+      SubnetId: !ImportValue
+        'Fn::Sub': '${InfraStackName}-PubSubnetId'
+      SecurityGroupIds:
+        - !ImportValue
+          'Fn::Sub': '${InfraStackName}-WebSecurityGroupId'
+      UserData:
+        'Fn::Base64': !Sub |
+          #!/bin/bash -xe
+          yum update -y
+          yum install -y aws-cfn-bootstrap
+          amazon-linux-extras install nginx1.12 -y
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource WebServer --region ${AWS::Region}
+      Tags:
+        - Key: Name
+          Value: Web Server
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            /etc/nginx/nginx.conf:
+              content: !Sub |
+                user nginx;
+                worker_processes auto;
+                error_log /var/log/nginx/error.log;
+                pid /var/run/nginx.pid;
+                events {
+                    worker_connections 1024;
+                }
+                http {
+                    access_log    /var/log/nginx/access.log  combined;
+                    include       /etc/nginx/mime.types;
+                    default_type  application/octet-stream;
+                    server {
+                      listen 80;
+                      location / {
+                        proxy_pass http://10.0.1.7;
+                      }
+                    }
+                }
+          commands:
+            01_enable_nginx:
+              command: systemctl enable nginx
+            02_start_nginx:
+              command: systemctl start nginx
+Outputs:
+  EC2PublicDNS:
+    Description: The Public DNS of the Web Server
+    Value: !GetAtt WebServer.PublicDnsName
