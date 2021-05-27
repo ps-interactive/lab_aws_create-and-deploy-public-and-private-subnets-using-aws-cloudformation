@@ -9,7 +9,7 @@ Parameters:
     Description: The stack name used for the infrastructure stack
 
 Resources:
-  AppServer:
+  WebServer:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t3.nano
@@ -18,19 +18,19 @@ Resources:
         'Fn::Sub': '${InfraStackName}-PrivSubnetId'
       SecurityGroupIds:
         - !ImportValue
-          'Fn::Sub': '${InfraStackName}-AppSecurityGroupId'
+          'Fn::Sub': '${InfraStackName}-WebSecurityGroupId'
       UserData:
         'Fn::Base64': !Sub |
           #!/bin/bash -xe
           yum update -y
           amazon-linux-extras install nginx1.12 -y
-          echo "Hello from App Server" > /usr/share/nginx/html/index.html
+          echo "Hello from Private Subnet" > /usr/share/nginx/html/index.html
           systemctl start nginx
       Tags:
         - Key: Name
-          Value: App Server
+          Value: Web Server
 
 Outputs:
   EC2PrivateIP:
-    Description: The private IP of the App Server
-    Value: !GetAtt AppServer.PrivateIp
+    Description: The private IP of the Web Server
+    Value: !GetAtt WebServer.PrivateIp

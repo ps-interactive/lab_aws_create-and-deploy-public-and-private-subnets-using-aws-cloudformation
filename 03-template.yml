@@ -1,0 +1,151 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Create and Deploy Public and Private Subnets'
+
+Resources:
+  VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: Lab VPC
+
+  PublicSubnet:
+    Type:
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: us-west-2a
+      CidrBlock:
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: Public Subnet
+
+  PrivateSubnet:
+    Type:
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: us-west-2a
+      CidrBlock:
+      Tags:
+        - Key: Name
+          Value: Private Subnet
+
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+
+  GatewayToInternet:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+
+  PublicRoute:
+    Type: 'AWS::EC2::Route'
+    DependsOn: GatewayToInternet
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId:
+      RouteTableId: !Ref PublicRouteTable
+
+  NatGateway:
+    Type: 'AWS::EC2::NatGateway'
+    DependsOn: NatPublicIP
+    Properties:
+      AllocationId: !GetAtt NatPublicIP.AllocationId
+      SubnetId: !Ref PublicSubnet
+
+  NatPublicIP:
+    Type: 'AWS::EC2::EIP'
+    DependsOn: VPC
+    Properties:
+      Domain: vpc
+
+  PrivateRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Network
+          Value: Private
+
+  PrivateRoute:
+    Type: 'AWS::EC2::Route'
+    DependsOn: GatewayToInternet
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PrivateSubnetRouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId:
+      RouteTableId: !Ref PrivateRouteTable
+
+  ProxyServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable web access
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort:
+          ToPort:
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: ProxyServer SecurityGroup
+
+  WebServerSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn: ProxyServerSecurityGroup
+    Properties:
+      GroupDescription: WebServer Security Group
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - SourceSecurityGroupId:
+          IpProtocol: tcp
+          FromPort:
+          ToPort:
+      Tags:
+        - Key: Name
+          Value: WebServer SecurityGroup
+
+Outputs:
+  PrivateSubnet:
+    Description: The Private Subnet Id
+    Value: !Ref PrivateSubnet
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivSubnetId'
+
+  PublicSubnet:
+    Description: The Public Subnet Id
+    Value: !Ref PublicSubnet
+    Export:
+      Name: !Sub '${AWS::StackName}-PubSubnetId'
+
+  WebServerSecurityGroupId:
+    Description: The security group Id for Private instances
+    Value: !Ref WebServerSecurityGroupId
+    Export:
+      Name: !Sub '${AWS::StackName}-WebSecurityGroupId'
+
+  ProxyServerSecurityGroup:
+    Description: The security group Id for Public instances
+    Value: !Ref ProxyServerSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-ProxySecurityGroupId'

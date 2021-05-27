@@ -9,7 +9,7 @@ Parameters:
     Description: The stack name used for the infrastructure stack
 
 Resources:
-  WebServer:
+  ProxyServer:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t3.nano
@@ -18,17 +18,17 @@ Resources:
         'Fn::Sub': '${InfraStackName}-PubSubnetId'
       SecurityGroupIds:
         - !ImportValue
-          'Fn::Sub': '${InfraStackName}-WebSecurityGroupId'
+          'Fn::Sub': '${InfraStackName}-ProxySecurityGroupId'
       UserData:
         'Fn::Base64': !Sub |
           #!/bin/bash -xe
           yum update -y
           yum install -y aws-cfn-bootstrap
           amazon-linux-extras install nginx1.12 -y
-          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource WebServer --region ${AWS::Region}
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ProxyServer --region ${AWS::Region}
       Tags:
         - Key: Name
-          Value: Web Server
+          Value: Proxy Server
     Metadata:
       AWS::CloudFormation::Init:
         config:
@@ -49,7 +49,7 @@ Resources:
                     server {
                       listen 80;
                       location / {
-                        proxy_pass http://10.0.1.7;
+                        proxy_pass <insert-ip-here>;
                       }
                     }
                 }
@@ -60,5 +60,5 @@ Resources:
               command: systemctl start nginx
 Outputs:
   EC2PublicDNS:
-    Description: The Public DNS of the Web Server
-    Value: !GetAtt WebServer.PublicDnsName
+    Description: The Public DNS of the Reverse Proxy Server
+    Value: !GetAtt ProxyServer.PublicDnsName
