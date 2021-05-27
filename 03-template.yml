@@ -103,8 +103,8 @@ Resources:
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort:
-          ToPort:
+          FromPort: 80
+          ToPort: 80
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
@@ -119,8 +119,8 @@ Resources:
       SecurityGroupIngress:
         - SourceSecurityGroupId:
           IpProtocol: tcp
-          FromPort:
-          ToPort:
+          FromPort: 80
+          ToPort: 80
       Tags:
         - Key: Name
           Value: WebServer SecurityGroup
